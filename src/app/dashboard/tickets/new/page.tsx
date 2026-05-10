@@ -125,13 +125,7 @@ export default function NewTicketPage() {
               </div>
            </div>
 
-           <div className="p-8 bg-gray-50 rounded-[2rem] border border-gray-100 flex gap-4">
-              <HelpCircle className="w-6 h-6 text-primary shrink-0" />
-              <div>
-                 <h4 className="font-bold text-gray-900 mb-1">Need help?</h4>
-                 <p className="text-xs text-gray-500 leading-relaxed">Our AI assistant is active and will suggest the best department based on your description.</p>
-              </div>
-           </div>
+
         </div>
 
         {/* Form Main Area */}
