@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter);
+  --font-outfit: var(--font-outfit);
+  
+  --color-background: #f4f7fa;
+  --color-foreground: #1a1a1a;
+  
+  --color-primary: #1e3a8a; /* AAST Blue */
+  --color-primary-foreground: #ffffff;
+  
+  --color-secondary: #f3f4f6;
+  --color-secondary-foreground: #111827;
+  
+  --color-muted: #f9fafb;
+  --color-muted-foreground: #6b7280;
+  
+  --color-accent: #eab308; /* AAST Yellow/Gold */
+  --color-accent-foreground: #000000;
+  
+  --color-border: #e5e7eb;
+  --color-input: #ffffff;
+  --color-ring: #3b82f6;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* University Portal Styles - Using standard CSS to avoid @apply issues with custom classes */
+.portal-card {
+  background-color: white;
+  border-radius: 1rem;
+  border: 1px solid #f3f4f6;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  overflow: hidden;
+}
+
+.portal-header {
+  background-color: white;
+  border-bottom: 1px solid #f3f4f6;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.portal-sidebar {
+  width: 16rem;
+  background-color: var(--color-primary);
+  color: white;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 1rem;
+  border: 1px solid #f9fafb;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: box-shadow 0.2s;
+  cursor: pointer;
+  aspect-ratio: 1 / 1;
+}
+
+.activity-tile:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.activity-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.announcement-card {
+  background-color: white;
+  border-radius: 1rem;
+  border: 1px solid #f3f4f6;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Redefining existing classes for the new theme */
+.glass {
+  background: white;
+  border-bottom: 1px solid #eee;
+}
+
+.glass-card {
+  background: white;
+  border: 1px solid #eee;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.text-gradient {
+  color: var(--color-primary);
+}
+
+.bg-gradient-premium {
+  background-color: #f4f7fa;
+}
