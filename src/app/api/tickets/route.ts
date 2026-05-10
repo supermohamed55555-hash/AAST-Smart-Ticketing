@@ -125,7 +125,7 @@ export async function PATCH() {
     let admin = await prisma.admin.findFirst({ include: { user: true } });
     if (!admin) {
       const adminUser = await prisma.user.create({ data: { name: "System Admin", role: "ADMIN" } });
-      admin = await prisma.admin.create({ 
+      admin = await prisma.admin.create({
         data: { userId: adminUser.id, department: "Management" },
         include: { user: true }
       });
