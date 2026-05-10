@@ -28,55 +28,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ activeCount, resolvedCount, urgentCount });
     }
 
+    if (notifications === "true") {
+      const student = await prisma.student.findFirst({ include: { user: true } });
+      if (!student) return NextResponse.json([]);
+      const notifs = await prisma.notification.findMany({
+        where: { studentId: student.id },
+        orderBy: { createdAt: "desc" }
+      });
+      return NextResponse.json(notifs);
+    }
+
     const tickets = await prisma.ticket.findMany({
-      include: { student: { include: { user: true } }, department: true },
+      include: { 
+        student: { include: { user: true } }, 
+        department: true 
+      },
       orderBy: { createdAt: "desc" }
     });
     return NextResponse.json(tickets);
   } catch (error) {
     return NextResponse.json({ error: "Fetch Failed" }, { status: 500 });
-  }
-}
-
-export async function PATCH() {
-  try {
-    // 1. Precise Lookup using the official Enum value
-    let nextTicket = await prisma.ticket.findFirst({
-      where: { status: "PENDING", priority: "URGENT" },
-      orderBy: { createdAt: "asc" }
-    });
-
-    if (!nextTicket) {
-      nextTicket = await prisma.ticket.findFirst({
-        where: { status: "PENDING", priority: "NORMAL" },
-        orderBy: { createdAt: "asc" }
-      });
-    }
-
-    if (!nextTicket) {
-      return NextResponse.json({ message: "Queue is empty." }, { status: 200 });
-    }
-
-    // 2. Admin Safety Check
-    let admin = await prisma.admin.findFirst({ include: { user: true } });
-    if (!admin) {
-      const adminUser = await prisma.user.create({ data: { name: "System Admin", role: "ADMIN" } });
-      admin = await prisma.admin.create({ 
-        data: { userId: adminUser.id, department: "Management" },
-        include: { user: true }
-      });
-    }
-
-    // 3. Process Ticket
-    const updatedTicket = await prisma.ticket.update({
-      where: { id: nextTicket.id },
-      data: { status: "COMPLETED" }
-    });
-
-    return NextResponse.json({ message: "Success", ticket: updatedTicket });
-  } catch (error) {
-    console.error("PATCH ERROR:", error);
-    return NextResponse.json({ error: "System Error: " + (error as Error).message }, { status: 500 });
   }
 }
 
@@ -96,8 +67,8 @@ export async function POST(req: Request) {
 
     let student = await prisma.student.upsert({
       where: { userId: user.id },
-      update: { studentId: studentId || "20240001" },
-      create: { userId: user.id, studentId: studentId || "20240001" }
+      update: { studentId: studentId || "241008562" },
+      create: { userId: user.id, studentId: studentId || "241008562" }
     });
 
     let service = await prisma.service.findFirst({ where: { departmentId: dept.id } });
@@ -114,8 +85,65 @@ export async function POST(req: Request) {
       }
     });
 
+    // NOTE: No notification created here as requested.
     return NextResponse.json(ticket);
   } catch (error) {
     return NextResponse.json({ error: "Post Failed" }, { status: 500 });
+  }
+}
+
+export async function PATCH() {
+  try {
+    let nextTicket = await prisma.ticket.findFirst({
+      where: { status: "PENDING", priority: "URGENT" },
+      include: { student: { include: { user: true } }, department: true },
+      orderBy: { createdAt: "asc" }
+    });
+
+    if (!nextTicket) {
+      nextTicket = await prisma.ticket.findFirst({
+        where: { status: "PENDING", priority: "NORMAL" },
+        include: { student: { include: { user: true } }, department: true },
+        orderBy: { createdAt: "asc" }
+      });
+    }
+
+    if (!nextTicket) return NextResponse.json({ message: "Queue is empty." }, { status: 200 });
+
+    let admin = await prisma.admin.findFirst({ include: { user: true } });
+    if (!admin) {
+      const adminUser = await prisma.user.create({ data: { name: "System Admin", role: "ADMIN" } });
+      admin = await prisma.admin.create({ 
+        data: { userId: adminUser.id, department: "Management" },
+        include: { user: true }
+      });
+    }
+
+    const updatedTicket = await prisma.ticket.update({
+      where: { id: nextTicket.id },
+      data: { status: "COMPLETED" }
+    });
+
+    // CREATE DETAILED NOTIFICATION
+    await prisma.notification.create({
+      data: {
+        studentId: updatedTicket.studentId,
+        title: "Ticket Resolved ✅",
+        message: `Hello ${nextTicket.student.user.name} (${nextTicket.student.studentId}), your request #${updatedTicket.id.slice(-6)} in ${nextTicket.department.name} has been processed by ${admin.user.name}.`,
+      }
+    });
+
+    await prisma.adminAction.create({
+      data: {
+        adminId: admin.id,
+        action: "SERVE_TICKET",
+        payload: { ticketId: updatedTicket.id }
+      }
+    });
+
+    return NextResponse.json({ message: "Success", ticket: updatedTicket });
+  } catch (error) {
+    console.error("PATCH ERROR:", error);
+    return NextResponse.json({ error: "System Error" }, { status: 500 });
   }
 }

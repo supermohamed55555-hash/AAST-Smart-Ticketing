@@ -89,16 +89,19 @@ export default function StudentDashboard() {
              <div className="space-y-4">
                 {notifications.length > 0 ? (
                   notifications.map((n) => (
-                    <div key={n.id} className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                       <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center shrink-0">
-                          <CheckCircle className="w-5 h-5" />
-                       </div>
-                       <div>
-                          <div className="font-bold text-slate-900">{n.title}</div>
-                          <div className="text-sm text-slate-500">{n.message}</div>
-                          <div className="text-[10px] font-black text-slate-300 uppercase mt-1">{new Date(n.createdAt).toLocaleTimeString()}</div>
-                       </div>
-                    </div>
+                     <div key={n.id} className="flex gap-4 p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-yellow-200 transition-colors">
+                        <div className="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0 border border-green-100">
+                           <CheckCircle className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                           <div className="font-black text-slate-900 text-sm uppercase tracking-tight mb-1">{n.title}</div>
+                           <p className="text-sm text-slate-600 leading-relaxed font-medium">{n.message}</p>
+                           <div className="text-[10px] font-bold text-slate-400 uppercase mt-3 flex items-center gap-2">
+                              <Clock className="w-3 h-3" />
+                              {new Date(n.createdAt).toLocaleString()}
+                           </div>
+                        </div>
+                     </div>
                   ))
                 ) : (
                   <div className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs">No new notifications</div>
