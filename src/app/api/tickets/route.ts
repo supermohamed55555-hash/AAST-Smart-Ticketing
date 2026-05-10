@@ -5,7 +5,7 @@ import { universityRoot } from "@/lib/tree";
 // Academic Utility: Binary Search Implementation
 function binarySearch(arr: any[], targetId: string) {
   let left = 0;
-  right = arr.length - 1;
+  let right = arr.length - 1;
   while (left <= right) {
     const mid = Math.floor((left + right) / 2);
     if (arr[mid].id === targetId) return arr[mid];
@@ -18,7 +18,6 @@ function binarySearch(arr: any[], targetId: string) {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const checkStack = searchParams.get("checkStack");
     const stats = searchParams.get("stats");
     const notifications = searchParams.get("notifications");
 
@@ -41,36 +40,24 @@ export async function GET(req: Request) {
 
 export async function PATCH() {
   try {
-    console.log("🔍 ADMIN SERVE START");
-    
-    // DEBUG: Log ALL tickets to see what's actually there
-    const allTickets = await prisma.ticket.findMany();
-    console.log("Total Tickets in DB:", allTickets.length);
-    console.log("Full Ticket Data:", JSON.stringify(allTickets, null, 2));
-
-    // Find first PENDING ticket (case-insensitive search for safety)
+    // 1. Precise Lookup using the official Enum value
     let nextTicket = await prisma.ticket.findFirst({
-      where: { 
-        OR: [
-          { status: "PENDING" as any },
-          { status: "pending" as any }
-        ]
-      },
+      where: { status: "PENDING", priority: "URGENT" },
       orderBy: { createdAt: "asc" }
     });
 
     if (!nextTicket) {
-       // Last resort: Just take the first one that isn't completed
-       nextTicket = await prisma.ticket.findFirst({
-         where: { NOT: { status: "COMPLETED" as any } },
-         orderBy: { createdAt: "asc" }
-       });
+      nextTicket = await prisma.ticket.findFirst({
+        where: { status: "PENDING", priority: "NORMAL" },
+        orderBy: { createdAt: "asc" }
+      });
     }
 
     if (!nextTicket) {
-      return NextResponse.json({ message: "Queue is truly empty in Database." }, { status: 200 });
+      return NextResponse.json({ message: "Queue is empty." }, { status: 200 });
     }
 
+    // 2. Admin Safety Check
     let admin = await prisma.admin.findFirst({ include: { user: true } });
     if (!admin) {
       const adminUser = await prisma.user.create({ data: { name: "System Admin", role: "ADMIN" } });
@@ -80,16 +67,15 @@ export async function PATCH() {
       });
     }
 
+    // 3. Process Ticket
     const updatedTicket = await prisma.ticket.update({
       where: { id: nextTicket.id },
       data: { status: "COMPLETED" }
     });
 
-    console.log("✅ Successfully served ticket:", updatedTicket.id);
-
     return NextResponse.json({ message: "Success", ticket: updatedTicket });
   } catch (error) {
-    console.error("❌ PATCH ERROR:", error);
+    console.error("PATCH ERROR:", error);
     return NextResponse.json({ error: "System Error: " + (error as Error).message }, { status: 500 });
   }
 }
