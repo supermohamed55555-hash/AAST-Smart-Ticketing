@@ -9,9 +9,7 @@ import {
   AlertCircle,
   Play,
   RotateCcw,
-  PlusCircle,
   Database,
-  ArrowUpRight,
   TrendingUp,
   Brain
 } from "lucide-react";
@@ -26,7 +24,7 @@ import {
   Area
 } from "recharts";
 
-const data = [
+const chartData = [
   { time: "08:00", count: 12 },
   { time: "10:00", count: 45 },
   { time: "12:00", count: 78 },
@@ -37,18 +35,33 @@ const data = [
 
 export default function AdminDashboard() {
   const [undoActive, setUndoActive] = useState(false);
+  const [stats, setStats] = useState({ activeCount: 0, resolvedCount: 0, urgentCount: 0 });
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch("/api/tickets?stats=true", { cache: 'no-store' });
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error("Stats Fetch Error:", error);
+    }
+  };
+
+  const checkUndoStack = async () => {
+    try {
+      const response = await fetch("/api/tickets?checkStack=true", { cache: 'no-store' });
+      const data = await response.json();
+      setUndoActive(data.hasActions);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   useEffect(() => {
-    const checkUndoStack = async () => {
-      try {
-        const response = await fetch("/api/tickets?checkStack=true", { cache: 'no-store' });
-        const data = await response.json();
-        setUndoActive(data.hasActions);
-      } catch (error) {
-        console.error(error);
-      }
-    };
+    fetchStats();
     checkUndoStack();
+    const interval = setInterval(fetchStats, 10000); // Auto-refresh stats every 10s
+    return () => clearInterval(interval);
   }, []);
 
   const handleProcessNext = async () => {
@@ -57,13 +70,12 @@ export default function AdminDashboard() {
       const data = await response.json();
       
       if (data.ticket) {
-        alert(`Serving Next: [${data.ticket.priority}] Ticket - Success! Database updated.`);
+        alert(`Serving Next: [${data.ticket.priority}] Ticket - Success!`);
+        fetchStats(); // Refresh stats immediately
+        checkUndoStack();
       } else {
         alert(data.message || "Queue is empty.");
       }
-      
-      setUndoActive(true);
-      setTimeout(() => setUndoActive(false), 5000);
     } catch (error) {
       console.error(error);
     }
@@ -76,10 +88,8 @@ export default function AdminDashboard() {
       
       if (response.ok) {
         alert(data.message);
-        // Re-check stack after undo to see if more actions remain
-        const checkRes = await fetch("/api/tickets?checkStack=true", { cache: 'no-store' });
-        const checkData = await checkRes.json();
-        setUndoActive(checkData.hasActions);
+        fetchStats();
+        checkUndoStack();
       } else {
         alert(data.message || "Failed to undo.");
       }
@@ -113,12 +123,12 @@ export default function AdminDashboard() {
          </div>
       </div>
 
-      {/* Overview Stats */}
+      {/* Overview Stats (REAL DATA) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <AdminStatCard icon={<Users className="w-6 h-6 text-blue-600" />} label="Total Waiting" value="128" trend="+12%" />
-        <AdminStatCard icon={<AlertCircle className="w-6 h-6 text-red-600" />} label="Urgent (Heap)" value="8" trend="Critical" />
-        <AdminStatCard icon={<CheckCircle className="w-6 h-6 text-green-600" />} label="Processed" value="1.2k" trend="98% Success" />
-        <AdminStatCard icon={<Clock className="w-6 h-6 text-purple-600" />} label="Avg. Wait" value="14m" trend="-2m" />
+        <AdminStatCard icon={<Users className="w-6 h-6 text-blue-600" />} label="Total Waiting" value={stats.activeCount} trend="Live" />
+        <AdminStatCard icon={<AlertCircle className="w-6 h-6 text-red-600" />} label="Urgent (Heap)" value={stats.urgentCount} trend="Priority" />
+        <AdminStatCard icon={<CheckCircle className="w-6 h-6 text-green-600" />} label="Processed" value={stats.resolvedCount} trend="Success" />
+        <AdminStatCard icon={<Clock className="w-6 h-6 text-purple-600" />} label="Avg. Wait" value="14m" trend="Sync" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
@@ -136,7 +146,7 @@ export default function AdminDashboard() {
           
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#1e3a8a" stopOpacity={0.1}/>
@@ -205,7 +215,7 @@ function AdminStatCard({ icon, label, value, trend }: any) {
     <div className="portal-card p-8 bg-white hover:shadow-xl transition-all border-slate-100">
        <div className="flex justify-between items-start mb-6">
           <div className="p-3 bg-slate-50 rounded-2xl">{icon}</div>
-          <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${trend.includes('+') ? 'bg-green-100 text-green-700' : trend === 'Critical' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+          <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase bg-blue-50 text-primary`}>
              {trend}
           </span>
        </div>

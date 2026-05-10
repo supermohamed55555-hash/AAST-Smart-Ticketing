@@ -113,19 +113,36 @@ export async function POST(req: Request) {
 
 export async function PATCH() {
   try {
+    // Try to find ANY pending ticket regardless of priority if the main logic fails
     let nextTicket = await prisma.ticket.findFirst({
-      where: { status: "PENDING", priority: "URGENT" },
+      where: { 
+        status: { equals: "PENDING" } as any,
+        priority: "URGENT" 
+      },
       orderBy: { createdAt: "asc" }
     });
 
     if (!nextTicket) {
       nextTicket = await prisma.ticket.findFirst({
-        where: { status: "PENDING", priority: "NORMAL" },
+        where: { 
+          status: { equals: "PENDING" } as any,
+          priority: "NORMAL" 
+        },
         orderBy: { createdAt: "asc" }
       });
     }
 
-    if (!nextTicket) return NextResponse.json({ message: "No tickets in queue" });
+    // fallback if Enum matching is being strict
+    if (!nextTicket) {
+      nextTicket = await prisma.ticket.findFirst({
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "asc" }
+      });
+    }
+
+    console.log("Next Ticket Found:", nextTicket);
+
+    if (!nextTicket) return NextResponse.json({ message: "Queue is truly empty in DB." });
 
     let admin = await prisma.admin.findFirst();
     if (!admin) {
