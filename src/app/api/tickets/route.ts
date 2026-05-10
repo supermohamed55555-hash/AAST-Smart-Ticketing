@@ -23,15 +23,11 @@ export async function GET(req: Request) {
     const stats = searchParams.get("stats");
     const notifications = searchParams.get("notifications");
 
-    // 1. Check Stack Status
     if (checkStack === "true") {
-      const lastAction = await prisma.adminAction.findFirst({
-        orderBy: { timestamp: "desc" }
-      });
+      const lastAction = await prisma.adminAction.findFirst({ orderBy: { timestamp: "desc" } });
       return NextResponse.json({ hasActions: !!lastAction });
     }
 
-    // 2. Fetch Notifications for the logged-in student (Mocked to first student for demo)
     if (notifications === "true") {
       const student = await prisma.student.findFirst();
       if (!student) return NextResponse.json([]);
@@ -42,7 +38,6 @@ export async function GET(req: Request) {
       return NextResponse.json(notifs);
     }
 
-    // 3. Fetch Real Stats
     if (stats === "true") {
       const activeCount = await prisma.ticket.count({ where: { status: "PENDING" } });
       const resolvedCount = await prisma.ticket.count({ where: { status: "COMPLETED" } });
@@ -50,12 +45,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ activeCount, resolvedCount, urgentCount });
     }
 
-    // 4. Regular Ticket Fetching
     const tickets = await prisma.ticket.findMany({
-      include: {
-        student: { include: { user: true } },
-        department: true
-      },
+      include: { student: { include: { user: true } }, department: true },
       orderBy: { id: "asc" }
     });
 
@@ -66,8 +57,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(tickets);
   } catch (error) {
-    console.error("GET Tickets Error:", error);
-    return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
+    return NextResponse.json({ error: "Fetch Failed" }, { status: 500 });
   }
 }
 
@@ -77,18 +67,22 @@ export async function POST(req: Request) {
     const { studentName, studentId, departmentName, description, priority } = body;
 
     const { node: validatedDept } = universityRoot.bfs(departmentName);
-    if (!validatedDept) {
-      return NextResponse.json({ error: "Invalid Department" }, { status: 400 });
-    }
+    if (!validatedDept) return NextResponse.json({ error: "Invalid Department" }, { status: 400 });
 
-    let dept = await prisma.department.findUnique({ where: { name: departmentName } });
-    if (!dept) dept = await prisma.department.create({ data: { name: departmentName } });
+    let dept = await prisma.department.upsert({
+      where: { name: departmentName },
+      update: {},
+      create: { name: departmentName }
+    });
 
     let user = await prisma.user.findFirst({ where: { name: studentName } });
     if (!user) user = await prisma.user.create({ data: { name: studentName, role: "STUDENT" } });
 
-    let student = await prisma.student.findUnique({ where: { userId: user.id } });
-    if (!student) student = await prisma.student.create({ data: { userId: user.id, studentId: studentId || "20240001" } });
+    let student = await prisma.student.upsert({
+      where: { userId: user.id },
+      update: { studentId: studentId || "20240001" },
+      create: { userId: user.id, studentId: studentId || "20240001" }
+    });
 
     let service = await prisma.service.findFirst({ where: { departmentId: dept.id } });
     if (!service) service = await prisma.service.create({ data: { name: "General Support", departmentId: dept.id } });
@@ -106,61 +100,48 @@ export async function POST(req: Request) {
 
     return NextResponse.json(ticket);
   } catch (error) {
-    console.error("POST Ticket Error:", error);
-    return NextResponse.json({ error: "Failed to create ticket" }, { status: 500 });
+    return NextResponse.json({ error: "Post Failed" }, { status: 500 });
   }
 }
 
 export async function PATCH() {
   try {
-    // Try to find ANY pending ticket regardless of priority if the main logic fails
+    // 1. Precise Ticket Lookup
     let nextTicket = await prisma.ticket.findFirst({
-      where: { 
-        status: { equals: "PENDING" } as any,
-        priority: "URGENT" 
-      },
+      where: { status: "PENDING", priority: "URGENT" },
       orderBy: { createdAt: "asc" }
     });
 
     if (!nextTicket) {
       nextTicket = await prisma.ticket.findFirst({
-        where: { 
-          status: { equals: "PENDING" } as any,
-          priority: "NORMAL" 
-        },
+        where: { status: "PENDING", priority: "NORMAL" },
         orderBy: { createdAt: "asc" }
       });
     }
 
-    // fallback if Enum matching is being strict
-    if (!nextTicket) {
-      nextTicket = await prisma.ticket.findFirst({
-        where: { status: "PENDING" },
-        orderBy: { createdAt: "asc" }
-      });
-    }
+    if (!nextTicket) return NextResponse.json({ message: "Queue is officially empty." }, { status: 200 });
 
-    console.log("Next Ticket Found:", nextTicket);
-
-    if (!nextTicket) return NextResponse.json({ message: "Queue is truly empty in DB." });
-
-    let admin = await prisma.admin.findFirst();
+    // 2. Ensure Admin Existence (Crucial step that was likely failing)
+    let admin = await prisma.admin.findFirst({ include: { user: true } });
     if (!admin) {
       const adminUser = await prisma.user.create({ data: { name: "System Admin", role: "ADMIN" } });
-      admin = await prisma.admin.create({ data: { userId: adminUser.id, department: "General" } });
+      admin = await prisma.admin.create({ 
+        data: { userId: adminUser.id, department: "Management" },
+        include: { user: true }
+      });
     }
 
+    // 3. Update & Notify
     const updatedTicket = await prisma.ticket.update({
       where: { id: nextTicket.id },
       data: { status: "COMPLETED" }
     });
 
-    // Create Notification for the student
     await prisma.notification.create({
       data: {
         studentId: updatedTicket.studentId,
-        title: "Ticket Resolved ✅",
-        message: `Your request (${updatedTicket.priority}) has been processed successfully.`,
+        title: "Update: Ticket Processed ✅",
+        message: `Your ${updatedTicket.priority} request has been resolved by ${admin.user.name}.`,
       }
     });
 
@@ -172,25 +153,24 @@ export async function PATCH() {
       }
     });
 
-    return NextResponse.json({ message: `Served ${updatedTicket.priority} ticket`, ticket: updatedTicket });
+    return NextResponse.json({ message: "Success", ticket: updatedTicket });
   } catch (error) {
-    console.error("PATCH Error:", error);
-    return NextResponse.json({ error: "Failed to serve ticket" }, { status: 500 });
+    console.error("CRITICAL PATCH ERROR:", error);
+    return NextResponse.json({ error: "System Error during processing" }, { status: 500 });
   }
 }
 
 export async function PUT() {
   try {
     const lastAction = await prisma.adminAction.findFirst({ orderBy: { timestamp: "desc" } });
-    if (!lastAction || lastAction.action !== "SERVE_TICKET") return NextResponse.json({ message: "Nothing to undo" }, { status: 400 });
+    if (!lastAction) return NextResponse.json({ message: "No actions to undo" }, { status: 400 });
 
     const payload = lastAction.payload as any;
     await prisma.ticket.update({ where: { id: payload.ticketId }, data: { status: "PENDING" } });
     await prisma.adminAction.delete({ where: { id: lastAction.id } });
 
-    return NextResponse.json({ message: "Undo successful." });
+    return NextResponse.json({ message: "Undo Success" });
   } catch (error) {
-    console.error("UNDO Error:", error);
-    return NextResponse.json({ error: "Failed to undo" }, { status: 500 });
+    return NextResponse.json({ error: "Undo Failed" }, { status: 500 });
   }
 }

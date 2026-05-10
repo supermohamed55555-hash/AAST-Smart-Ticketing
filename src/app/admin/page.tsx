@@ -69,12 +69,16 @@ export default function AdminDashboard() {
       const response = await fetch("/api/tickets", { method: "PATCH" });
       const data = await response.json();
       
-      if (data.ticket) {
-        alert(`Serving Next: [${data.ticket.priority}] Ticket - Success!`);
-        fetchStats(); // Refresh stats immediately
-        checkUndoStack();
+      if (response.ok) {
+        if (data.ticket) {
+          alert(`Success! Served: [${data.ticket.priority}] Ticket.`);
+          fetchStats();
+          checkUndoStack();
+        } else {
+          alert(data.message || "Queue is empty.");
+        }
       } else {
-        alert(data.message || "Queue is empty.");
+        alert(data.error || "System error occurred. Check server logs.");
       }
     } catch (error) {
       console.error(error);
