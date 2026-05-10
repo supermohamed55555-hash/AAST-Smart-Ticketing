@@ -3,21 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { universityRoot } from "@/lib/tree";
 
 // Academic Utility: Binary Search Implementation
-// Used for high-efficiency lookup in the ticket registry
 function binarySearch(arr: any[], targetId: string) {
   let left = 0;
   let right = arr.length - 1;
-
   while (left <= right) {
     const mid = Math.floor((left + right) / 2);
-    // Compare numerically or as strings
     if (arr[mid].id === targetId) return arr[mid];
-    
-    if (arr[mid].id < targetId) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+    if (arr[mid].id < targetId) left = mid + 1;
+    else right = mid - 1;
   }
   return null;
 }
@@ -27,7 +20,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const checkStack = searchParams.get("checkStack");
     const searchId = searchParams.get("searchId");
+    const stats = searchParams.get("stats");
+    const notifications = searchParams.get("notifications");
 
+    // 1. Check Stack Status
     if (checkStack === "true") {
       const lastAction = await prisma.adminAction.findFirst({
         orderBy: { timestamp: "desc" }
@@ -35,18 +31,34 @@ export async function GET(req: Request) {
       return NextResponse.json({ hasActions: !!lastAction });
     }
 
-    // Fetch all pending tickets
+    // 2. Fetch Notifications for the logged-in student (Mocked to first student for demo)
+    if (notifications === "true") {
+      const student = await prisma.student.findFirst();
+      if (!student) return NextResponse.json([]);
+      const notifs = await prisma.notification.findMany({
+        where: { studentId: student.id },
+        orderBy: { createdAt: "desc" }
+      });
+      return NextResponse.json(notifs);
+    }
+
+    // 3. Fetch Real Stats
+    if (stats === "true") {
+      const activeCount = await prisma.ticket.count({ where: { status: "PENDING" } });
+      const resolvedCount = await prisma.ticket.count({ where: { status: "COMPLETED" } });
+      const urgentCount = await prisma.ticket.count({ where: { status: "PENDING", priority: "URGENT" } });
+      return NextResponse.json({ activeCount, resolvedCount, urgentCount });
+    }
+
+    // 4. Regular Ticket Fetching
     const tickets = await prisma.ticket.findMany({
-      where: { status: "PENDING" },
       include: {
         student: { include: { user: true } },
         department: true
       },
-      orderBy: { id: "asc" } // Sorted for Binary Search
+      orderBy: { id: "asc" }
     });
 
-    // Academic Implementation: Binary Search
-    // If a searchId is provided, we use Binary Search instead of simple filtering
     if (searchId && tickets.length > 0) {
       const found = binarySearch(tickets, searchId);
       return NextResponse.json(found ? [found] : []);
@@ -64,42 +76,23 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { studentName, studentId, departmentName, description, priority } = body;
 
-    // Academic Implementation: General Tree (BFS Validation)
-    // We use BFS to ensure the selected department actually exists in our hierarchy
     const { node: validatedDept } = universityRoot.bfs(departmentName);
-    
     if (!validatedDept) {
-      return NextResponse.json({ error: "Invalid Department. BFS traversal failed to find node." }, { status: 400 });
+      return NextResponse.json({ error: "Invalid Department" }, { status: 400 });
     }
 
-    // 1. Ensure Department in DB
-    let dept = await prisma.department.findUnique({
-      where: { name: departmentName }
-    });
-    if (!dept) {
-      dept = await prisma.department.create({ data: { name: departmentName } });
-    }
+    let dept = await prisma.department.findUnique({ where: { name: departmentName } });
+    if (!dept) dept = await prisma.department.create({ data: { name: departmentName } });
 
-    // 2. Ensure User/Student
     let user = await prisma.user.findFirst({ where: { name: studentName } });
-    if (!user) {
-      user = await prisma.user.create({ data: { name: studentName, role: "STUDENT" } });
-    }
+    if (!user) user = await prisma.user.create({ data: { name: studentName, role: "STUDENT" } });
 
     let student = await prisma.student.findUnique({ where: { userId: user.id } });
-    if (!student) {
-      student = await prisma.student.create({
-        data: { userId: user.id, studentId: studentId || "20240001" }
-      });
-    }
+    if (!student) student = await prisma.student.create({ data: { userId: user.id, studentId: studentId || "20240001" } });
 
-    // 3. Create Service
     let service = await prisma.service.findFirst({ where: { departmentId: dept.id } });
-    if (!service) {
-      service = await prisma.service.create({ data: { name: "General Support", departmentId: dept.id } });
-    }
+    if (!service) service = await prisma.service.create({ data: { name: "General Support", departmentId: dept.id } });
 
-    // 4. Create Ticket
     const ticket = await prisma.ticket.create({
       data: {
         studentId: student.id,
@@ -120,7 +113,6 @@ export async function POST(req: Request) {
 
 export async function PATCH() {
   try {
-    // Priority Queue Logic (Max-Heap Simulation)
     let nextTicket = await prisma.ticket.findFirst({
       where: { status: "PENDING", priority: "URGENT" },
       orderBy: { createdAt: "asc" }
@@ -133,9 +125,7 @@ export async function PATCH() {
       });
     }
 
-    if (!nextTicket) {
-      return NextResponse.json({ message: "No tickets in queue" });
-    }
+    if (!nextTicket) return NextResponse.json({ message: "No tickets in queue" });
 
     let admin = await prisma.admin.findFirst();
     if (!admin) {
@@ -148,7 +138,15 @@ export async function PATCH() {
       data: { status: "COMPLETED" }
     });
 
-    // Push to Action Stack (Undo)
+    // Create Notification for the student
+    await prisma.notification.create({
+      data: {
+        studentId: updatedTicket.studentId,
+        title: "Ticket Resolved ✅",
+        message: `Your request (${updatedTicket.priority}) has been processed successfully.`,
+      }
+    });
+
     await prisma.adminAction.create({
       data: {
         adminId: admin.id,
@@ -157,10 +155,7 @@ export async function PATCH() {
       }
     });
 
-    return NextResponse.json({ 
-      message: `Served ${updatedTicket.priority} ticket`,
-      ticket: updatedTicket 
-    });
+    return NextResponse.json({ message: `Served ${updatedTicket.priority} ticket`, ticket: updatedTicket });
   } catch (error) {
     console.error("PATCH Error:", error);
     return NextResponse.json({ error: "Failed to serve ticket" }, { status: 500 });
@@ -169,21 +164,11 @@ export async function PATCH() {
 
 export async function PUT() {
   try {
-    // Pop from Action Stack
-    const lastAction = await prisma.adminAction.findFirst({
-      orderBy: { timestamp: "desc" }
-    });
-
-    if (!lastAction || lastAction.action !== "SERVE_TICKET") {
-      return NextResponse.json({ message: "Nothing to undo" }, { status: 400 });
-    }
+    const lastAction = await prisma.adminAction.findFirst({ orderBy: { timestamp: "desc" } });
+    if (!lastAction || lastAction.action !== "SERVE_TICKET") return NextResponse.json({ message: "Nothing to undo" }, { status: 400 });
 
     const payload = lastAction.payload as any;
-    await prisma.ticket.update({
-      where: { id: payload.ticketId },
-      data: { status: "PENDING" }
-    });
-
+    await prisma.ticket.update({ where: { id: payload.ticketId }, data: { status: "PENDING" } });
     await prisma.adminAction.delete({ where: { id: lastAction.id } });
 
     return NextResponse.json({ message: "Undo successful." });
