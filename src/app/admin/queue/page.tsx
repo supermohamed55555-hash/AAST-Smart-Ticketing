@@ -84,12 +84,12 @@ export default function LiveQueuePage() {
                    <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded-full">Priority Order</span>
                 </div>
                 <div className="p-0">
-                   {tickets.filter(t => t.priority === 'URGENT').length > 0 ? (
-                      tickets.filter(t => t.priority === 'URGENT').map((ticket, i) => (
+                   {tickets.filter(t => t.priority === 'URGENT' && t.status === 'PENDING').length > 0 ? (
+                      tickets.filter(t => t.priority === 'URGENT' && t.status === 'PENDING').map((ticket, i) => (
                         <QueueItem key={ticket.id} ticket={ticket} isFirst={i === 0} />
                       ))
                    ) : (
-                      <div className="p-10 text-center text-slate-300 text-xs font-bold uppercase">No urgent tickets</div>
+                      <div className="p-10 text-center text-slate-300 text-xs font-bold uppercase">No urgent tickets waiting</div>
                    )}
                 </div>
              </div>
@@ -103,12 +103,12 @@ export default function LiveQueuePage() {
                    <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full">Entry Order</span>
                 </div>
                 <div className="p-0">
-                   {tickets.filter(t => t.priority === 'NORMAL').length > 0 ? (
-                      tickets.filter(t => t.priority === 'NORMAL').map((ticket, i) => (
+                   {tickets.filter(t => t.priority === 'NORMAL' && t.status === 'PENDING').length > 0 ? (
+                      tickets.filter(t => t.priority === 'NORMAL' && t.status === 'PENDING').map((ticket, i) => (
                         <QueueItem key={ticket.id} ticket={ticket} isFirst={i === 0} />
                       ))
                    ) : (
-                      <div className="p-10 text-center text-slate-300 text-xs font-bold uppercase">No normal tickets</div>
+                      <div className="p-10 text-center text-slate-300 text-xs font-bold uppercase">No normal tickets waiting</div>
                    )}
                 </div>
              </div>
