@@ -31,8 +31,10 @@ export async function GET(req: Request) {
     if (notifications === "true") {
       const student = await prisma.student.findFirst({ include: { user: true } });
       if (!student) return NextResponse.json([]);
+      
+      // Match Schema: userId instead of studentId
       const notifs = await prisma.notification.findMany({
-        where: { studentId: student.id },
+        where: { userId: student.userId },
         orderBy: { createdAt: "desc" }
       });
       return NextResponse.json(notifs);
@@ -47,6 +49,7 @@ export async function GET(req: Request) {
     });
     return NextResponse.json(tickets);
   } catch (error) {
+    console.error("GET Error:", error);
     return NextResponse.json({ error: "Fetch Failed" }, { status: 500 });
   }
 }
@@ -87,6 +90,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(ticket);
   } catch (error) {
+    console.error("POST Error:", error);
     return NextResponse.json({ error: "Post Failed" }, { status: 500 });
   }
 }
@@ -123,17 +127,16 @@ export async function PATCH() {
       data: { status: "COMPLETED" }
     });
 
-    // ROBUST NOTIFICATION CREATION
+    // ROBUST NOTIFICATION CREATION (Match Schema fields)
     const studentName = nextTicket.student?.user?.name || "Student";
-    const studentId = nextTicket.student?.studentId || "N/A";
+    const studentIdStr = nextTicket.student?.studentId || "N/A";
     const deptName = nextTicket.department?.name || "Academic";
     const ticketShortId = updatedTicket.id.slice(-6).toUpperCase();
 
     await prisma.notification.create({
       data: {
-        studentId: updatedTicket.studentId,
-        title: "Ticket Resolved ✅",
-        message: `Hello ${studentName} (${studentId}), your request #${ticketShortId} in ${deptName} has been processed by ${admin.user?.name || "Admin"}.`,
+        userId: nextTicket.student.userId, // Must use userId per schema
+        message: `✅ Ticket Resolved: Hello ${studentName} (${studentIdStr}), your request #${ticketShortId} in ${deptName} has been processed by ${admin.user?.name || "Admin"}.`,
       }
     });
 
@@ -148,6 +151,6 @@ export async function PATCH() {
     return NextResponse.json({ message: "Success", ticket: updatedTicket });
   } catch (error) {
     console.error("PATCH ERROR:", error);
-    return NextResponse.json({ error: "System Error: Missing Data" }, { status: 500 });
+    return NextResponse.json({ error: "System Error: Check Server Logs" }, { status: 500 });
   }
 }

@@ -94,9 +94,8 @@ export default function StudentDashboard() {
                            <CheckCircle className="w-6 h-6" />
                         </div>
                         <div className="flex-1">
-                           <div className="font-black text-slate-900 text-sm uppercase tracking-tight mb-1">{n.title}</div>
-                           <p className="text-sm text-slate-600 leading-relaxed font-medium">{n.message}</p>
-                           <div className="text-[10px] font-bold text-slate-400 uppercase mt-3 flex items-center gap-2">
+                           <p className="text-sm text-slate-700 leading-relaxed font-bold">{n.message}</p>
+                           <div className="text-[10px] font-black text-slate-400 uppercase mt-3 flex items-center gap-2 tracking-widest">
                               <Clock className="w-3 h-3" />
                               {new Date(n.createdAt).toLocaleString()}
                            </div>
