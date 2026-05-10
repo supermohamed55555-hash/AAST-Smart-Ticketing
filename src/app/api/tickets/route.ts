@@ -57,13 +57,13 @@ export async function POST(req: Request) {
     const { studentName, studentId, departmentName, description, priority } = body;
     
     let dept = await prisma.department.upsert({
-      where: { name: departmentName },
+      where: { name: departmentName || "General" },
       update: {},
-      create: { name: departmentName }
+      create: { name: departmentName || "General" }
     });
 
     let user = await prisma.user.findFirst({ where: { name: studentName } });
-    if (!user) user = await prisma.user.create({ data: { name: studentName, role: "STUDENT" } });
+    if (!user) user = await prisma.user.create({ data: { name: studentName || "Anonymous", role: "STUDENT" } });
 
     let student = await prisma.student.upsert({
       where: { userId: user.id },
@@ -79,13 +79,12 @@ export async function POST(req: Request) {
         studentId: student.id,
         departmentId: dept.id,
         serviceId: service.id,
-        description: description,
+        description: description || "No description provided",
         priority: priority === "URGENT" ? "URGENT" : "NORMAL",
         status: "PENDING"
       }
     });
 
-    // NOTE: No notification created here as requested.
     return NextResponse.json(ticket);
   } catch (error) {
     return NextResponse.json({ error: "Post Failed" }, { status: 500 });
@@ -124,12 +123,17 @@ export async function PATCH() {
       data: { status: "COMPLETED" }
     });
 
-    // CREATE DETAILED NOTIFICATION
+    // ROBUST NOTIFICATION CREATION
+    const studentName = nextTicket.student?.user?.name || "Student";
+    const studentId = nextTicket.student?.studentId || "N/A";
+    const deptName = nextTicket.department?.name || "Academic";
+    const ticketShortId = updatedTicket.id.slice(-6).toUpperCase();
+
     await prisma.notification.create({
       data: {
         studentId: updatedTicket.studentId,
         title: "Ticket Resolved ✅",
-        message: `Hello ${nextTicket.student.user.name} (${nextTicket.student.studentId}), your request #${updatedTicket.id.slice(-6)} in ${nextTicket.department.name} has been processed by ${admin.user.name}.`,
+        message: `Hello ${studentName} (${studentId}), your request #${ticketShortId} in ${deptName} has been processed by ${admin.user?.name || "Admin"}.`,
       }
     });
 
@@ -144,6 +148,6 @@ export async function PATCH() {
     return NextResponse.json({ message: "Success", ticket: updatedTicket });
   } catch (error) {
     console.error("PATCH ERROR:", error);
-    return NextResponse.json({ error: "System Error" }, { status: 500 });
+    return NextResponse.json({ error: "System Error: Missing Data" }, { status: 500 });
   }
 }
