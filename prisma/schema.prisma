@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum TicketStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  VIP
+  URGENT
+  NORMAL
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  password      String?
+  role          Role      @default(STUDENT)
+  image         String?
+  studentProfile Student?
+  adminProfile  Admin?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  studentId String   @unique // Academic ID
+  tickets   Ticket[]
+}
+
+model Admin {
+  id        String        @id @default(cuid())
+  userId    String        @unique
+  user      User          @relation(fields: [userId], references: [id])
+  department String?
+  actions   AdminAction[]
+}
+
+model Department {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  services Service[]
+  tickets  Ticket[]
+}
+
+model Service {
+  id           String     @id @default(cuid())
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  tickets      Ticket[]
+}
+
+model Ticket {
+  id              String       @id @default(cuid())
+  ticketNumber    Int          @default(autoincrement())
+  studentId       String
+  student         Student      @relation(fields: [studentId], references: [id])
+  departmentId    String
+  department      Department   @relation(fields: [departmentId], references: [id])
+  serviceId       String
+  service         Service      @relation(fields: [serviceId], references: [id])
+  description     String
+  aiSummary       String?
+  attachmentUrl   String?
+  status          TicketStatus @default(PENDING)
+  priority        Priority     @default(NORMAL)
+  queuePosition   Int?
+  estimatedWait   Int?         // in minutes
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  queueHistory    QueueHistory[]
+}
+
+model QueueHistory {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  status    TicketStatus
+  changedAt DateTime @default(now())
+}
+
+model AdminAction {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id])
+  action    String   // e.g., "CANCEL_TICKET", "PROCESS_NEXT"
+  payload   Json?
+  timestamp DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
